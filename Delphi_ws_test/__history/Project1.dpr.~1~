@@ -1,0 +1,21 @@
+program Project1;
+
+uses
+  Vcl.Forms,
+  MainForm in 'MainForm.pas' {Form1},
+  AsmTouch in 'AsmTouch.pas',
+  MemStats in 'MemStats.pas';
+
+{$R *.res}
+
+begin
+  Application.Initialize;
+  Application.MainFormOnTaskbar := True;
+
+  Form1 := TForm1.Create(nil);  // š dfm ‚ğg‚í‚¸’¼Ú¶¬
+
+  Application.Run;
+
+  Form1.Free;
+end.
+

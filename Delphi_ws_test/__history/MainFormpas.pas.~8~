@@ -1,0 +1,259 @@
+unit MainFormpas;
+
+interface
+
+uses
+  Winapi.Windows,
+  System.SysUtils,
+  System.Classes,
+  Vcl.Forms,
+  Vcl.StdCtrls,
+  Vcl.ExtCtrls,
+  Vcl.Controls,
+  Vcl.Graphics,
+  AsmTouch,
+  MemStats;
+
+
+  type
+  TMemPhase = (
+    mpIdle,
+    mpAlloc,
+    mpTouching,
+    mpTouched,
+    mpFree,
+    mpAfterFree   // š’Ç‰Á
+  );
+
+type
+  TForm1 = class(TForm)
+  private
+    BtnSeq: TButton;
+    BtnStride: TButton;
+    MemoLog: TMemo;
+    TimerSample: TTimer;
+    PaintBox: TPaintBox;
+
+    FBuf: Pointer;
+    FSize: Integer;
+    FStartFaults: UInt64;
+
+    FPoints: array of Integer;
+
+
+    procedure OnRunSequential(Sender: TObject);
+    procedure OnRunStride(Sender: TObject);
+    procedure OnTimer(Sender: TObject);
+    procedure OnPaint(Sender: TObject);
+    procedure DrawMarker(X: Integer; const Caption: string);
+    procedure StartTest;
+    procedure EndTest;
+    procedure Log(const S: string);
+
+    procedure AddPoint(MB: Integer);
+  public
+    FShown: Boolean;  // š ’Ç‰Á
+    FAfterFreeCount: Integer;
+    FPhase: TMemPhase;
+    procedure AppIdle(Sender: TObject; var Done: Boolean); // š ’Ç‰Á
+    constructor Create(AOwner: TComponent); override;
+  end;
+
+var
+  Form1: TForm1;
+
+implementation
+
+{ TForm1 }
+
+
+procedure TForm1.AppIdle(Sender: TObject; var Done: Boolean);
+begin
+  if not FShown then
+  begin
+    Show;        // Ž©•ªŽ©g‚ð•\Ž¦
+    FShown := True;
+  end;
+  Done := True;
+end;
+
+procedure TForm1.DrawMarker(X: Integer; const Caption: string);
+begin
+  with PaintBox.Canvas do
+  begin
+    Pen.Color := clRed;
+    MoveTo(X, 0);
+    LineTo(X, PaintBox.Height);
+    TextOut(X + 2, 2, Caption);
+  end;
+end;
+
+
+
+constructor TForm1.Create(AOwner: TComponent);
+begin
+  inherited CreateNew(AOwner);
+  FShown := False;  // š ”O‚Ì‚½‚ß‰Šú‰»
+
+  Caption := 'Memory Probe (Delphi / ASM / No TeeChart)';
+  Width := 900;
+  Height := 600;
+
+  BtnSeq := TButton.Create(Self);
+  BtnSeq.Parent := Self;
+  BtnSeq.SetBounds(10, 10, 180, 30);
+  BtnSeq.Caption := 'Run Sequential ASM';
+  BtnSeq.OnClick := OnRunSequential;
+
+  BtnStride := TButton.Create(Self);
+  BtnStride.Parent := Self;
+  BtnStride.SetBounds(200, 10, 180, 30);
+  BtnStride.Caption := 'Run Page Stride ASM';
+  BtnStride.OnClick := OnRunStride;
+
+  PaintBox := TPaintBox.Create(Self);
+  PaintBox.Parent := Self;
+  PaintBox.SetBounds(10, 50, 860, 250);
+  PaintBox.OnPaint := OnPaint;
+
+  MemoLog := TMemo.Create(Self);
+  MemoLog.Parent := Self;
+  MemoLog.SetBounds(10, 310, 860, 240);
+
+  TimerSample := TTimer.Create(Self);
+  TimerSample.Interval := 200;
+  TimerSample.OnTimer := OnTimer;
+end;
+
+
+procedure TForm1.StartTest;
+var
+  M: TMemSnapshot;
+begin
+  MemoLog.Clear;
+  SetLength(FPoints, 0);
+  PaintBox.Invalidate;
+
+  FSize := 512 * 1024 * 1024; // 512MB
+  FBuf := VirtualAlloc(nil, FSize, MEM_COMMIT, PAGE_READWRITE);
+
+  M := CaptureMemory;
+  FStartFaults := M.PageFaults;
+
+  Log('Start WS: ' + IntToStr(M.WorkingSet div (1024*1024)) + ' MB');
+  AddPoint(M.WorkingSet div (1024*1024));
+
+  TimerSample.Enabled := True;
+end;
+
+procedure TForm1.EndTest;
+var
+  M: TMemSnapshot;
+begin
+  TimerSample.Enabled := False;
+
+  Log('Phase: Touch finished');
+
+  VirtualFree(FBuf, 0, MEM_RELEASE);
+  Log('Phase: VirtualFree called');
+
+  FPhase := mpAfterFree;
+  FAfterFreeCount := 0;
+
+  TimerSample.Interval := 200;   // ‰ð•úŒã‚à“¯‚¶ŽüŠú‚ÅŠÏ‘ª
+  TimerSample.Enabled := True;
+end;
+
+procedure TForm1.OnTimer(Sender: TObject);
+var
+  M: TMemSnapshot;
+begin
+  M := CaptureMemory;
+  AddPoint(M.WorkingSet div (1024*1024));
+
+  if FPhase = mpAfterFree then
+  begin
+    Inc(FAfterFreeCount);
+
+    Log(
+      Format(
+        'After Free WS: %d MB (sample %d)',
+        [M.WorkingSet div (1024*1024), FAfterFreeCount]
+      )
+    );
+
+    // š —á‚¦‚Î 10 ‰ñŠÏ‘ª‚µ‚½‚çI—¹
+    if FAfterFreeCount >= 10 then
+    begin
+      TimerSample.Enabled := False;
+      FPhase := mpIdle;
+      Log('Phase: AfterFree observation finished');
+    end;
+  end;
+end;
+
+procedure TForm1.AddPoint(MB: Integer);
+var
+  L: Integer;
+begin
+  L := Length(FPoints);
+  SetLength(FPoints, L + 1);
+  FPoints[L] := MB;
+  PaintBox.Invalidate;
+end;
+
+procedure TForm1.OnPaint(Sender: TObject);
+var
+  i, maxMB, w, h, x, y: Integer;
+begin
+  with PaintBox.Canvas do
+  begin
+    Brush.Color := clWhite;
+    FillRect(PaintBox.ClientRect);
+
+    if Length(FPoints) < 2 then Exit;
+
+    maxMB := 1;
+    for i := 0 to High(FPoints) do
+      if FPoints[i] > maxMB then
+        maxMB := FPoints[i];
+
+    w := PaintBox.Width;
+    h := PaintBox.Height;
+
+    Pen.Color := clBlack;
+    Rectangle(0, 0, w-1, h-1);
+
+    Pen.Color := clBlue;
+    MoveTo(0, h - (FPoints[0] * h div maxMB));
+
+    for i := 1 to High(FPoints) do
+    begin
+      x := i * w div High(FPoints);
+      y := h - (FPoints[i] * h div maxMB);
+      LineTo(x, y);
+    end;
+  end;
+end;
+
+procedure TForm1.OnRunSequential(Sender: TObject);
+begin
+  StartTest;
+  TouchSequential(FBuf, FSize);
+  EndTest;
+end;
+
+procedure TForm1.OnRunStride(Sender: TObject);
+begin
+  StartTest;
+  TouchPageStride(FBuf, FSize);
+  EndTest;
+end;
+
+procedure TForm1.Log(const S: string);
+begin
+  MemoLog.Lines.Add(FormatDateTime('hh:nn:ss.zzz', Now) + ' ' + S);
+end;
+
+end.
+

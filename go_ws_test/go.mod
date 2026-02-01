@@ -1,0 +1,5 @@
+module go_ws_test
+
+go 1.25.6
+
+require golang.org/x/sys v0.40.0 // indirect

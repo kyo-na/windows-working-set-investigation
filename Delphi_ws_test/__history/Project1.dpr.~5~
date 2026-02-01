@@ -1,0 +1,35 @@
+program Project1;
+
+uses
+  Vcl.Forms,
+  MainFormpas in 'MainFormpas.pas',
+  AsmTouch in 'AsmTouch.pas',
+  MemStats in 'MemStats.pas';
+
+{$R *.res}
+
+var
+  Shown: Boolean = False;
+
+begin
+  Application.Initialize;
+  Application.MainFormOnTaskbar := True;
+
+  Form1 := TForm1.Create(nil);
+
+  Application.OnIdle :=
+    procedure(Sender: TObject; var Done: Boolean)
+    begin
+      if not Shown then
+      begin
+        Form1.Show;   // Åö RunäJénå„Ç…ï\é¶Ç≥ÇÍÇÈ
+        Shown := True;
+      end;
+      Done := True;
+    end;
+
+  Application.Run;
+
+  Form1.Free;
+end.
+
