@@ -1,0 +1,21 @@
+# build artifacts
+build/
+Release/
+Debug/
+*.exe
+*.obj
+*.pdb
+*.ilk
+
+# node
+node_modules/
+
+# python
+__pycache__/
+*.pyc
+
+# logs
+*.log
+
+# VS / MSBuild
+.vs/
