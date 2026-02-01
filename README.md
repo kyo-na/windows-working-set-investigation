@@ -24,4 +24,15 @@
 ---
 
 ## 📁 ディレクトリ一覧
-
+cpp_ws_test
+cs_ws_test
+Delphi_ws_test
+go_ws_test
+java_ws_test
+lua_ws_test
+nim_ws_test
+py_ws_test
+wasm_ws_test
+zig_ws_test
+mem_js
+mem_pypy
