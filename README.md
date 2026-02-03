@@ -23,6 +23,10 @@
 
 ---
 
+## 関連記事
+Windows 11 25H2 の Working Set 挙動を実測して分かったこと｜キョウスケ
+https://note.com/kyona_blog/n/nd9eb4d2f671a
+
 ## 📁 ディレクトリ一覧
 cpp_ws_test
 cs_ws_test
